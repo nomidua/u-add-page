@@ -1,6 +1,6 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.0
+ * Version: 1.2
  * Updated: 09.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
@@ -13,6 +13,7 @@
  *   imgW, imgH   — ширина/высота первого изображения (по умолчанию 800x451)
  *   imgUsers     — логины (в нижнем регистре), для которых ставится размер первого изображения
  *   prUsers      — логины (в нижнем регистре), для которых автоматически ставится «PR»
+ *   annMax, desMax — лимит символов для «Аннотация» / «Описание» (по умолчанию 150)
  *   Если списка нет — соответствующая функция не работает.
  *
  * Блоки:
@@ -23,6 +24,8 @@
  * 5. Ширина и высота первого изображения
  * 6. Редирект после сохранения
  * 7. Автоматический PR по пользователю
+ * 8. Ссылки в статье (список ссылок под редактором)
+ * 9. Счётчик символов в полях «Аннотация» и «Описание»
  ***/
 
 (function () {
@@ -140,12 +143,19 @@
   });
 
   // ===== 4. Очистка и замена кавычек при сохранении =====
+  // Поля: Название, Title, Мета Description + поля «Аннотация» и «Описание» (по подписи строки, номер otherN не важен)
   (function () {
     var f = document.getElementById('addEntForm');
     if (!f) return;
     f.addEventListener('submit', function (e) {
       var fields = [].slice.call(e.target.querySelectorAll('input[name="title"],input[name="meta_title"],textarea[name="meta_description"]'));
       [].slice.call(e.target.querySelectorAll('.charcount.an,.charcount.des')).forEach(function (x) { fields.push(x.previousElementSibling); });
+      [].slice.call(e.target.querySelectorAll('tr')).forEach(function (r) {
+        if (r.cells && r.cells[0] && /^(Аннотация|Анотація|Описание|Опис)/i.test(r.cells[0].textContent.trim())) {
+          var i = r.querySelector('input[type="text"],textarea');
+          if (i && fields.indexOf(i) === -1) fields.push(i);
+        }
+      });
       fields.forEach(function (i) {
         if (!i || !i.matches('input,textarea')) return;
         i.value = i.value.replace(/"([^"]*)"/g, '«$1»').replace(/"/g, '″');
@@ -197,6 +207,87 @@
     s();
     new MutationObserver(s).observe(u.parentElement, { childList: true, subtree: true, characterData: true });
     f.addEventListener('submit', s, true);
+  })();
+
+  // ===== 8. Ссылки в статье (список ссылок под редактором) =====
+  // Строка создаётся сама под редактором; если в шаблоне формы уже есть #links-preview-M22 — используется она
+  (function () {
+    var cell = document.querySelector('#nwM23') || document.querySelector('.manTdText');
+    var prev = document.getElementById('links-preview-M22');
+    if (!prev) {
+      var row = cell && cell.closest('tr');
+      if (!row) return;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>Ссылки в статье:</td><td><div id="links-preview-M22" style="font-size:12px;font-weight:400;color:#333;max-height:130px;overflow-y:auto;word-wrap:break-word;">Загрузка...</div></td>';
+      row.parentNode.insertBefore(tr, row.nextSibling);
+      prev = document.getElementById('links-preview-M22');
+    }
+    var imgExts = /\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)(\?.*)?$/i;
+    var mySite = location.hostname.replace(/^www\./, '');
+    var txt = function (h) { var d = document.createElement('div'); d.innerHTML = h; return d.textContent; };
+    var cut = function (t) { return t.length > 150 ? t.substring(0, 150) + '...' : t; };
+    var int = setInterval(function () {
+      var ed = window.CKEDITOR && CKEDITOR.instances.message;
+      if (!ed || !ed.document) return;
+      clearInterval(int);
+      prev.textContent = 'Кликни вне редактора для обновления';
+      var extract = function () {
+        var html = ed.getData(), regex = /<a[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, links = [], m;
+        while ((m = regex.exec(html)) !== null) {
+          var url = txt(m[1]), tmp = document.createElement('div');
+          tmp.innerHTML = m[2];
+          var hasImage = tmp.querySelectorAll('img').length > 0, text = tmp.textContent.trim(), isMy = url.indexOf(mySite) !== -1;
+          if (imgExts.test(url)) continue;
+          if (hasImage && isMy) continue;
+          if (imgExts.test(text) && isMy) continue;
+          links.push({ url: cut(url), anc: cut(text === '' && hasImage ? '[IMG]' : text) });
+        }
+        if (!links.length) { prev.textContent = 'Ссылки не найдены'; return; }
+        prev.innerHTML = '';
+        links.forEach(function (l, i) {
+          var w = document.createElement('div');
+          w.style.cssText = 'margin-bottom:10px;display:grid;grid-template-columns:20px 1fr;gap:5px;align-items:start;';
+          w.innerHTML = '<span style="color:#777;"></span><div><div style="margin-bottom:3px;"></div><div style="color:#0066cc;word-break:break-all;"></div></div>';
+          w.children[0].textContent = (i + 1) + '.';
+          w.children[1].children[0].textContent = l.anc;
+          w.children[1].children[1].textContent = l.url;
+          prev.appendChild(w);
+        });
+      };
+      ed.on('blur', extract);
+      var t;
+      ed.on('change', function () { clearTimeout(t); t = setTimeout(extract, 500); });
+    }, 100);
+  })();
+
+  // ===== 9. Счётчик символов в полях «Аннотация» и «Описание» =====
+  // Поля ищутся по подписи строки; лимит по умолчанию 150 (cfg.annMax, cfg.desMax)
+  (function () {
+    var f = document.getElementById('addEntForm');
+    if (!f) return;
+    var st = document.createElement('style');
+    st.textContent = '.charcount{font-size:11px;position:absolute;top:2px;right:10px;}.charcount.green{color:#28a745!important;}.charcount.red{color:red!important;}';
+    document.head.appendChild(st);
+    [].slice.call(f.querySelectorAll('tr')).forEach(function (r) {
+      if (!r.cells || !r.cells[0] || r.cells.length < 2) return;
+      var label = r.cells[0].textContent.trim(), cls, max;
+      if (/^(Аннотация|Анотація)/i.test(label)) { cls = 'an'; max = cfg.annMax || 150; }
+      else if (/^(Описание|Опис)/i.test(label)) { cls = 'des'; max = cfg.desMax || 150; }
+      else return;
+      var i = r.cells[1].querySelector('input[type="text"],textarea');
+      if (!i) return;
+      var td = r.cells[1], c = td.querySelector('.charcount');
+      if (!c) { c = document.createElement('span'); c.className = 'charcount ' + cls; i.parentNode.insertBefore(c, i.nextSibling); }
+      getComputedStyle(td).position === 'static' && (td.style.position = 'relative');
+      var upd = function () {
+        var n = i.value.length;
+        c.textContent = n + ' из ' + max;
+        c.classList.toggle('red', n > max);
+        c.classList.toggle('green', n <= max);
+      };
+      i.addEventListener('input', upd);
+      if (i.value.length) upd();
+    });
   })();
 
 })();
