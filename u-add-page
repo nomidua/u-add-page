@@ -7,7 +7,7 @@
  * Подключение (в шаблоне страницы добавления, после $BODY$, БЕЗ async/defer):
  *   <script>window.uzCfg={imgW:800,imgH:451,imgUsers:['user1'],prUsers:['user1','user2']};</script>
  *   <script src="https://cdn.jsdelivr.net/gh/nomidua/clean-html-script@main/clean-html.js?v=$YEAR$$MONTH$$DAY$"></script>
- *   <script src="https://cdn.jsdelivr.net/gh/nomidua/ucoz-add-page@main/ucoz-add-page.js?v=$YEAR$$MONTH$$DAY$"></script>
+ *   <script src="https://cdn.jsdelivr.net/gh/nomidua/u-add-page@main/u-add-page.js?v=$YEAR$$MONTH$$DAY$"></script>
  *
  * Настройки (window.uzCfg, все необязательные):
  *   imgW, imgH   — ширина/высота первого изображения (по умолчанию 800x451)
