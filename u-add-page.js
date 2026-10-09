@@ -1,6 +1,6 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.4
+ * Version: 1.5
  * Updated: 09.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
@@ -19,7 +19,7 @@
  * Блоки:
  * 1. Панель кнопок в тулбаре редактора (uzEd)
  * 2. Кнопка «Умная очистка HTML» (функция cleanHTMLContent из clean-html.js)
- * 3. «Вставить содержание» (после 1-го абзаца / до 1-го заголовка; от 3 H2, больше 7 — свёрнуто) + уведомление
+ * 3. «Вставить/Обновить содержание» (после 1-го абзаца / до 1-го заголовка; от 3 H2, больше 7 — свёрнуто) + уведомление
  * 4. Очистка и замена кавычек при сохранении
  * 5. Ширина и высота первого изображения
  * 6. Редирект после сохранения
@@ -156,6 +156,18 @@
     r.appendChild(s);
     r.appendChild(b);
     uzEd.bar(r);
+    // Надпись кнопки: «Обновить содержание», если в статье уже есть содержание
+    var tm, lbl = function (e) { b.innerHTML = e.getData().indexOf('table-of-contents') > -1 ? 'Обновить содержание' : 'Вставить содержание'; },
+        hook = function (e) {
+          if (e.name !== 'message') return;
+          lbl(e);
+          e.on('dataReady', function () { lbl(e); });
+          e.on('change', function () { clearTimeout(tm); tm = setTimeout(function () { lbl(e); }, 300); });
+        };
+    if (window.CKEDITOR) {
+      var e = CKEDITOR.instances.message;
+      e && e.status === 'ready' ? hook(e) : CKEDITOR.on('instanceReady', function (ev) { hook(ev.editor); });
+    }
   });
 
   // ===== 4. Очистка и замена кавычек при сохранении =====
