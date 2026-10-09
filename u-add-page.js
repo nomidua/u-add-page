@@ -1,6 +1,6 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.3
+ * Version: 1.4
  * Updated: 09.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
@@ -25,7 +25,7 @@
  * 6. Редирект после сохранения
  * 7. Автоматический PR по пользователю
  * 8. Ссылки в статье (список ссылок под редактором)
- * 9. Счётчик символов в полях «Аннотация» и «Описание»
+ * 9. Счётчик символов в полях «Аннотация» и «Описание» (цифра справа у поля)
  ***/
 
 (function () {
@@ -277,32 +277,70 @@
   })();
 
   // ===== 9. Счётчик символов в полях «Аннотация» и «Описание» =====
-  // Поля ищутся по подписи строки; лимит по умолчанию 150 (cfg.annMax, cfg.desMax)
+  // Одна цифра справа у поля (в ячейке подписи), по центру по высоте; виден сразу.
+  // До лимита — светло-зелёная, больше — красная жирная. Лимит 150 (cfg.annMax, cfg.desMax).
+  // Место выбирается один раз (и при изменении окна) по самому длинному числу, чтобы цифра не прыгала при наборе:
+  // по центру справа; если не влезает рядом с подписью — меньше шрифт, затем нижний или верхний правый угол.
+  // Старые счётчики .charcount из шаблона формы (если остались) скрываются.
   (function () {
     var f = document.getElementById('addEntForm');
     if (!f) return;
-    var st = document.createElement('style');
-    st.textContent = '.charcount{font-size:11px;position:absolute;top:2px;right:10px;}.charcount.green{color:#28a745!important;}.charcount.red{color:red!important;}';
-    document.head.appendChild(st);
+    var textRect = function (L, c) {
+      var g = document.createRange(), R = null;
+      [].forEach.call(L.childNodes, function (n) {
+        if (n === c) return;
+        g.selectNodeContents(n);
+        [].forEach.call(g.getClientRects(), function (q) {
+          if (!q.width) return;
+          R = R ? { r: Math.max(R.r, q.right), t: Math.min(R.t, q.top), b: Math.max(R.b, q.bottom) } : { r: q.right, t: q.top, b: q.bottom };
+        });
+      });
+      return R;
+    };
     [].slice.call(f.querySelectorAll('tr')).forEach(function (r) {
-      if (!r.cells || !r.cells[0] || r.cells.length < 2) return;
-      var label = r.cells[0].textContent.trim(), cls, max;
-      if (/^(Аннотация|Анотація)/i.test(label)) { cls = 'an'; max = cfg.annMax || 150; }
-      else if (/^(Описание|Опис)/i.test(label)) { cls = 'des'; max = cfg.desMax || 150; }
+      if (!r.cells || !r.cells[0] || r.cells.length < 2 || r.querySelector('.uz-cc')) return;
+      var L = r.cells[0], label = L.textContent.trim(), max;
+      if (/^(Аннотация|Анотація)/i.test(label)) max = cfg.annMax || 150;
+      else if (/^(Описание|Опис)/i.test(label)) max = cfg.desMax || 150;
       else return;
       var i = r.cells[1].querySelector('input[type="text"],textarea');
       if (!i) return;
-      var td = r.cells[1], c = td.querySelector('.charcount');
-      if (!c) { c = document.createElement('span'); c.className = 'charcount ' + cls; i.parentNode.insertBefore(c, i.nextSibling); }
-      getComputedStyle(td).position === 'static' && (td.style.position = 'relative');
+      [].forEach.call(r.querySelectorAll('.charcount'), function (o) { o.style.setProperty('display', 'none', 'important'); });
+      var c = document.createElement('span');
+      c.className = 'uz-cc';
+      L.appendChild(c);
+      getComputedStyle(L).position === 'static' && (L.style.position = 'relative');
+      var p = function (k, v) { c.style.setProperty(k, v, 'important'); };
+      p('position', 'absolute'); p('line-height', '1'); p('margin', '0'); p('padding', '0'); p('background', 'none'); p('pointer-events', 'none'); p('white-space', 'nowrap');
+      var spots = [
+        { right: '6px', fs: '.8em', top: '50%', bottom: 'auto', tr: 'translateY(-50%)' },
+        { right: '2px', fs: '.7em', top: '50%', bottom: 'auto', tr: 'translateY(-50%)' },
+        { right: '2px', fs: '.7em', top: 'auto', bottom: '0', tr: 'none' },
+        { right: '2px', fs: '.7em', top: '0', bottom: 'auto', tr: 'none' }
+      ];
+      var place = function () {
+        var keep = c.textContent, w = String(Math.max(max * 2, 999)).replace(/\d/g, '0'), T, a, k, sp;
+        c.textContent = w;
+        p('font-weight', '700');
+        for (k = 0; k < spots.length; k++) {
+          sp = spots[k];
+          p('right', sp.right); p('font-size', sp.fs); p('top', sp.top); p('bottom', sp.bottom); p('transform', sp.tr);
+          T = textRect(L, c); a = c.getBoundingClientRect();
+          if (!T || !(a.left < T.r + 3 && a.top < T.b && a.bottom > T.t)) break;
+        }
+        if (k === spots.length) { sp = spots[0]; p('right', sp.right); p('font-size', sp.fs); p('top', sp.top); p('bottom', sp.bottom); p('transform', sp.tr); }
+        c.textContent = keep;
+        upd();
+      };
       var upd = function () {
         var n = i.value.length;
-        c.textContent = n + ' из ' + max;
-        c.classList.toggle('red', n > max);
-        c.classList.toggle('green', n <= max);
+        c.textContent = n;
+        p('color', n > max ? '#e00000' : '#7fc794');
+        p('font-weight', n > max ? '700' : '400');
       };
-      i.addEventListener('input', upd);
-      if (i.value.length) upd();
+      place();
+      ['input', 'change', 'focus'].forEach(function (e) { i.addEventListener(e, upd); });
+      window.addEventListener('resize', place);
     });
   })();
 
