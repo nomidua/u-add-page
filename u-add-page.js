@@ -1,6 +1,6 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.2
+ * Version: 1.3
  * Updated: 09.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
@@ -19,7 +19,7 @@
  * Блоки:
  * 1. Панель кнопок в тулбаре редактора (uzEd)
  * 2. Кнопка «Умная очистка HTML» (функция cleanHTMLContent из clean-html.js)
- * 3. «Вставить содержание» (после 1-го абзаца / до 1-го заголовка)
+ * 3. «Вставить содержание» (после 1-го абзаца / до 1-го заголовка; от 3 H2, больше 7 — свёрнуто) + уведомление
  * 4. Очистка и замена кавычек при сохранении
  * 5. Ширина и высота первого изображения
  * 6. Редирект после сохранения
@@ -82,16 +82,31 @@
     uzEd.bar(r);
   });
 
+  // Уведомление (в стиле «Умной очистки»): зелёное — готово, оранжевое — не вставлено
+  window.uzToast = function (msg, ok) {
+    var old = document.getElementById('uz-toast');
+    if (old) old.remove();
+    var t = document.createElement('div');
+    t.id = 'uz-toast';
+    t.innerHTML = msg;
+    t.style.cssText = 'position:fixed;top:5px;right:5px;z-index:999999;background:' + (ok ? '#4CAF50' : '#ff9800') + ';color:#fff;padding:18px 24px;border-radius:4px;font:15px/1.4 Arial,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:420px;cursor:pointer;';
+    t.onclick = function () { t.remove(); };
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 5000);
+  };
+
   // ===== 3. Вставить содержание =====
+  // От 3 заголовков H2; больше 7 пунктов — содержание свёрнуто. Старое содержание заменяется новым (без дублей)
   window.generateTableOfContents = function (mode) {
     if (typeof CKEDITOR === 'undefined' || !CKEDITOR.instances.message) return;
     var html = CKEDITOR.instances.message.getData();
-    if (!html) return;
+    if (!html) { uzToast('<strong>Содержание не вставлено</strong><br>Текст статьи пустой.', 0); return; }
     var tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
+    var oldToc = tempDiv.querySelectorAll('.table-of-contents');
+    [].forEach.call(oldToc, function (el) { el.remove(); });
     var h2s = tempDiv.querySelectorAll('h2');
-    if (h2s.length === 0) { alert('Не найдено заголовков H2!'); return; }
-    if (h2s.length === 1) { alert('Только один H2 — содержание не требуется!'); return; }
+    if (h2s.length < 3) { uzToast('<strong>Содержание не вставлено</strong><br>Заголовков H2: ' + h2s.length + '. Содержание вставляется от 3 заголовков.', 0); return; }
     var firstParaEl = tempDiv.querySelector('p');
     var textForLang = firstParaEl ? (firstParaEl.textContent || firstParaEl.innerText) : (h2s[0].textContent || h2s[0].innerText);
     var isUkrainian = /[іїєґІЇЄҐ]/i.test(textForLang);
@@ -118,14 +133,15 @@
       h2.outerHTML = h2Html;
       tocItems.push('<li><a href="#' + id + '">' + text + '</a></li>');
     });
-    var tocHTML = '<div class="table-of-contents"><details' + (tocItems.length > 10 ? '' : ' open') + '><summary class="table-of-contents-title">' + title + '</summary><ul>' + tocItems.join('') + '</ul></details></div>';
+    var tocHTML = '<div class="table-of-contents"><details' + (tocItems.length > 7 ? '' : ' open') + '><summary class="table-of-contents-title">' + title + '</summary><ul>' + tocItems.join('') + '</ul></details></div>';
     html = tempDiv.innerHTML;
     var fh = html.search(/<h2[\s>]/i);
-    var firstP = html.match(/<p[^>]*>[\s\S]*?<\/p>/i);
-    if (mode === 'h2' && fh > -1) { html = html.slice(0, fh) + tocHTML + html.slice(fh); }
-    else if (firstP) { html = html.replace(firstP[0], firstP[0] + tocHTML); }
-    else { html = tocHTML + html; }
+    var firstP = html.match(/<p[^>]*>[\s\S]*?<\/p>/i), where;
+    if (mode === 'h2' && fh > -1) { html = html.slice(0, fh) + tocHTML + html.slice(fh); where = 'до 1-го заголовка'; }
+    else if (firstP) { html = html.replace(firstP[0], firstP[0] + tocHTML); where = 'после 1-го абзаца'; }
+    else { html = tocHTML + html; where = 'в начало текста (абзацев нет)'; }
     CKEDITOR.instances.message.setData(html);
+    uzToast('<strong>' + (oldToc.length ? 'Содержание обновлено' : 'Содержание вставлено') + '</strong><br>Место: ' + where + '<br>Пунктов: ' + tocItems.length + ' — ' + (tocItems.length > 7 ? 'свёрнуто (больше 7)' : 'открыто'), 1);
   };
 
   document.addEventListener('DOMContentLoaded', function () {
