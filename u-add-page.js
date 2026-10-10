@@ -1,7 +1,7 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.5
- * Updated: 09.10.2026
+ * Version: 1.6
+ * Updated: 10.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
  * Подключение (в шаблоне страницы добавления, после $BODY$, БЕЗ async/defer):
@@ -26,6 +26,7 @@
  * 7. Автоматический PR по пользователю
  * 8. Ссылки в статье (список ссылок под редактором)
  * 9. Счётчик символов в полях «Аннотация» и «Описание» (цифра справа у поля)
+ * 10. ВК: снять отметку «Публиковать в ВК» для украинских статей и ссылок на .ua
  ***/
 
 (function () {
@@ -354,6 +355,52 @@
       ['input', 'change', 'focus'].forEach(function (e) { i.addEventListener(e, upd); });
       window.addEventListener('resize', place);
     });
+  })();
+
+  // ===== 10. ВК: снять отметку для украинских статей и ссылок на .ua =====
+  // Снимает отметку автоматически и пишет причину рядом с иконками. Возвращает, только если снимал сам.
+  // Если отметку переключили вручную — больше не трогает. Отключённый ВК (disabled) не трогает.
+  (function () {
+    var vk = document.getElementById('checkbox_vk');
+    if (!vk || vk.disabled) return;
+    var img = vk.parentNode.querySelector('.toggleImage'), td = vk.closest('td'), auto = false, manual = false, tm;
+    var note = document.createElement('div');
+    note.style.cssText = 'margin:4px 0 0;font-size:12px;line-height:1.3;color:#e65100;';
+    td && td.appendChild(note);
+    var set = function (on) { vk.checked = on; img && img.classList.toggle('selectedImage', on); };
+    vk.addEventListener('change', function () { manual = true; note.textContent = ''; img && img.classList.toggle('selectedImage', vk.checked); });
+    var why = function () {
+      var e = window.CKEDITOR && CKEDITOR.instances.message,
+          d = new DOMParser().parseFromString(e ? e.getData() : '', 'text/html'),
+          t = ((document.querySelector('#addEntForm [name="title"]') || {}).value || '') + ' ' + d.body.textContent,
+          uk = (t.match(/[іїєґ]/gi) || []).length, all = (t.match(/[а-яёіїєґ]/gi) || []).length;
+      if (all > 50 && uk / all > 0.02) return 'украинский текст';
+      var n = [].filter.call(d.querySelectorAll('a[href]'), function (a) {
+        try { return /\.(ua|xn--j1amh)$/i.test(new URL(a.getAttribute('href'), location.href).hostname); } catch (x) { return false; }
+      }).length;
+      return n ? 'ссылки на .ua (' + n + ')' : '';
+    };
+    var check = function () {
+      if (manual) return;
+      var r = why();
+      if (r) { if (vk.checked) { set(false); auto = true; } if (auto) note.textContent = 'ВК снят: ' + r; }
+      else if (auto) { set(true); auto = false; note.textContent = ''; }
+    };
+    var later = function () { clearTimeout(tm); tm = setTimeout(check, 500); };
+    var hook = function (e) {
+      if (e.name !== 'message') return;
+      check();
+      e.on('dataReady', check);
+      e.on('change', later);
+    };
+    if (window.CKEDITOR) {
+      var e = CKEDITOR.instances.message;
+      e && e.status === 'ready' ? hook(e) : CKEDITOR.on('instanceReady', function (ev) { hook(ev.editor); });
+    }
+    var ti = document.querySelector('#addEntForm [name="title"]');
+    ti && ti.addEventListener('input', later);
+    var f = document.getElementById('addEntForm');
+    f && f.addEventListener('submit', check, true);
   })();
 
 })();
