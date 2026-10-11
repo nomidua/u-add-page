@@ -1,6 +1,6 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.7
+ * Version: 1.8
  * Updated: 11.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
@@ -18,8 +18,9 @@
  *
  * Блоки:
  * 1. Панель кнопок в тулбаре редактора (uzEd)
- * 2. Кнопка «Умная очистка HTML» (функция cleanHTMLContent из clean-html.js)
+ * 2. Кнопка «Очистка HTML» (функция cleanHTMLContent из clean-html.js). Кнопки панели одной ширины, со своим ховером
  * 3. «Содержание» / «Обновить» (Стандарт — до 1-го заголовка, по умолчанию; Вначале — после 1-го абзаца; от 3 H2, больше 7 — свёрнуто) + уведомление
+ *    Уведомления: window.uzToast(html, type) — type: ok / err / info; стеклянный фон, полоска-таймер 5 сек
  * 4. Очистка и замена кавычек при сохранении
  * 5. Ширина и высота первого изображения
  * 6. Редирект после сохранения
@@ -66,7 +67,23 @@
     }
   };
 
-  var BTN = 'display:inline-block;float:none;position:static;width:auto;min-width:0;min-height:0;max-height:none;height:24px;line-height:16px;margin:0;padding:4px 8px;box-sizing:border-box;border:none;border-radius:3px;cursor:pointer;color:#fff;font-size:12px;font-weight:normal;text-transform:none;text-shadow:1px 1px #00000052;';
+  // Кнопки панели: одна ширина, свой шрифт и свой ховер (не зависят от CSS сайта)
+  var BTN = 'display:inline-block;float:none;position:static;width:104px;min-width:0;max-width:none;min-height:0;max-height:none;height:24px;line-height:16px;margin:0;padding:4px 6px;box-sizing:border-box;border:none;border-radius:3px;cursor:pointer;color:#fff;font:normal 12px/16px Arial,sans-serif;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:none;letter-spacing:0;text-shadow:1px 1px #00000052;';
+
+  // Общие стили: ховер кнопок панели и уведомления
+  (function () {
+    var s = document.createElement('style');
+    s.textContent = '#uz-edbar button{box-shadow:none!important;transform:none!important;transition:filter .2s ease,box-shadow .2s ease!important;animation:none!important}' +
+      '#uz-edbar button:hover{filter:brightness(1.08)!important;box-shadow:0 1px 3px rgba(0,0,0,.25)!important;transform:none!important}' +
+      '#uz-edbar button:active{filter:brightness(.95)!important;box-shadow:none!important;transform:none!important;animation:none!important}' +
+      '@keyframes uzIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}@keyframes uzBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}' +
+      '#uz-toasts{position:fixed;top:16px;right:16px;z-index:999999;display:flex;flex-direction:column;gap:10px;width:380px;max-width:calc(100vw - 32px)}' +
+      '.uz-t{position:relative;overflow:hidden;cursor:pointer;padding:14px 18px 17px;border-radius:10px;border:1px solid rgba(255,255,255,.7);background-color:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);box-shadow:0 8px 24px rgba(0,0,0,.15);font:16px/1.45 Arial,sans-serif;color:#222;text-align:left;animation:uzIn .25s ease-out}' +
+      '.uz-t strong:first-child{display:block;margin-bottom:3px}' +
+      '.uz-t i{position:absolute;left:0;bottom:0;height:3px;width:100%;transform-origin:left;animation:uzBar 5000ms linear forwards}' +
+      '.uz-t:hover i{animation-play-state:paused}';
+    document.head.appendChild(s);
+  })();
 
   // ===== 2. Кнопка «Умная очистка HTML» =====
   document.addEventListener('DOMContentLoaded', function () {
@@ -84,17 +101,22 @@
     uzEd.bar(r);
   });
 
-  // Уведомление (в стиле «Умной очистки»): зелёное — готово, оранжевое — не вставлено
-  window.uzToast = function (msg, ok) {
-    var old = document.getElementById('uz-toast');
-    if (old) old.remove();
+  // Уведомления: стеклянный белый фон, полоска-таймер 5 сек (пауза при наведении), клик — закрыть
+  // type: 'ok' (1/true) — лёгкий зелёный оттенок, 'err' (0/false) — лёгкий красный, 'info' — без оттенка
+  window.uzToast = function (msg, type) {
+    type = type === 'info' || type === 'ok' || type === 'err' ? type : (type ? 'ok' : 'err');
+    var tint = {ok: 'rgba(22,163,74,.22)', err: 'rgba(220,38,38,.22)', info: 'transparent'}[type],
+        bar = {ok: '#16a34a', err: '#dc2626', info: '#9ca3af'}[type],
+        box = document.getElementById('uz-toasts');
+    if (!box) { box = document.createElement('div'); box.id = 'uz-toasts'; document.body.appendChild(box); }
+    while (box.children.length >= 3) box.removeChild(box.firstChild);
     var t = document.createElement('div');
-    t.id = 'uz-toast';
-    t.innerHTML = msg;
-    t.style.cssText = 'position:fixed;top:5px;right:5px;z-index:999999;background:' + (ok ? '#4CAF50' : '#ff9800') + ';color:#fff;padding:18px 24px;border-radius:4px;font:15px/1.4 Arial,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:420px;cursor:pointer;';
+    t.className = 'uz-t';
+    t.style.backgroundImage = 'radial-gradient(120% 140% at 100% 100%,' + tint + ',transparent 55%)';
+    t.innerHTML = String(msg).replace(/^(<strong>[\s\S]*?<\/strong>)\s*<br\s*\/?>/i, '$1') + '<i style="background:' + bar + '"></i>';
     t.onclick = function () { t.remove(); };
-    document.body.appendChild(t);
-    setTimeout(function () { t.remove(); }, 5000);
+    t.lastChild.addEventListener('animationend', function () { t.remove(); });
+    box.appendChild(t);
   };
 
   // ===== 3. Вставить содержание =====
@@ -154,7 +176,7 @@
     s.style.cssText = uzEd.i('display:inline-block;float:none;position:static;width:auto;min-width:0;min-height:0;max-height:none;height:24px;line-height:16px;margin:0;padding:0 4px;box-sizing:border-box;font-size:12px;border:1px solid #ccc;border-radius:3px;background:#fff;color:#333;text-transform:none;');
     b.type = 'button';
     b.innerHTML = 'Содержание';
-    b.style.cssText = uzEd.i(BTN + 'min-width:92px;text-align:center;background:linear-gradient(270deg,rgb(155,123,42) 0,rgb(199,163,87) 65%);');
+    b.style.cssText = uzEd.i(BTN + 'background:linear-gradient(270deg,rgb(155,123,42) 0,rgb(199,163,87) 65%);');
     b.onclick = function () { generateTableOfContents(s.value); };
     r.appendChild(s);
     r.appendChild(b);
