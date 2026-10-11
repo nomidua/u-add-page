@@ -1,7 +1,7 @@
 /***
  * uCoz Add Page Tools
- * Version: 1.6
- * Updated: 10.10.2026
+ * Version: 1.7
+ * Updated: 11.10.2026
  * Служебный скрипт для страницы добавления/редактирования материала uCoz.
  *
  * Подключение (в шаблоне страницы добавления, после $BODY$, БЕЗ async/defer):
@@ -19,7 +19,7 @@
  * Блоки:
  * 1. Панель кнопок в тулбаре редактора (uzEd)
  * 2. Кнопка «Умная очистка HTML» (функция cleanHTMLContent из clean-html.js)
- * 3. «Вставить/Обновить содержание» (после 1-го абзаца / до 1-го заголовка; от 3 H2, больше 7 — свёрнуто) + уведомление
+ * 3. «Содержание» / «Обновить» (Стандарт — до 1-го заголовка, по умолчанию; Вначале — после 1-го абзаца; от 3 H2, больше 7 — свёрнуто) + уведомление
  * 4. Очистка и замена кавычек при сохранении
  * 5. Ширина и высота первого изображения
  * 6. Редирект после сохранения
@@ -46,7 +46,7 @@
       if (!w && c) {
         w = document.createElement('div');
         w.id = 'uz-edbar';
-        w.style.cssText = uzEd.i('position:absolute;top:10px;right:8px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:9px;margin:0;padding:0;width:auto;background:none;border:none;');
+        w.style.cssText = uzEd.i('position:absolute;top:10px;right:8px;z-index:10;display:flex;flex-direction:column;align-items:flex-end;gap:9px;margin:0;padding:0;width:auto;background:none;border:none;');
         getComputedStyle(c).position === 'static' && (c.style.position = 'relative');
         c.appendChild(w);
         var e = window.CKEDITOR && CKEDITOR.instances.message;
@@ -76,7 +76,8 @@
     var r = document.createElement('div'), b = document.createElement('button');
     r.style.cssText = uzEd.i('display:flex;align-items:center;gap:4px;order:2;margin:0;padding:0;');
     b.type = 'button';
-    b.innerHTML = 'Умная очистка HTML';
+    b.innerHTML = 'Очистка HTML';
+    b.title = 'Умная очистка HTML';
     b.style.cssText = uzEd.i(BTN + 'background:linear-gradient(270deg,rgb(42,123,155) 0,rgb(87,199,133) 65%);');
     b.onclick = function () { if (typeof cleanHTMLContent === 'function') cleanHTMLContent(); };
     r.appendChild(b);
@@ -148,17 +149,18 @@
   document.addEventListener('DOMContentLoaded', function () {
     var r = document.createElement('div'), s = document.createElement('select'), b = document.createElement('button');
     r.style.cssText = uzEd.i('display:flex;align-items:center;gap:4px;order:1;margin:0;padding:0;');
-    s.innerHTML = '<option value="p">После 1-го абзаца</option><option value="h2">До 1-го заголовка</option>';
+    s.innerHTML = '<option value="h2">Стандарт</option><option value="p">Вначале</option>';
+    s.title = 'Стандарт — до 1-го заголовка, Вначале — после 1-го абзаца';
     s.style.cssText = uzEd.i('display:inline-block;float:none;position:static;width:auto;min-width:0;min-height:0;max-height:none;height:24px;line-height:16px;margin:0;padding:0 4px;box-sizing:border-box;font-size:12px;border:1px solid #ccc;border-radius:3px;background:#fff;color:#333;text-transform:none;');
     b.type = 'button';
-    b.innerHTML = 'Вставить содержание';
-    b.style.cssText = uzEd.i(BTN + 'background:linear-gradient(270deg,rgb(155,123,42) 0,rgb(199,163,87) 65%);');
+    b.innerHTML = 'Содержание';
+    b.style.cssText = uzEd.i(BTN + 'min-width:92px;text-align:center;background:linear-gradient(270deg,rgb(155,123,42) 0,rgb(199,163,87) 65%);');
     b.onclick = function () { generateTableOfContents(s.value); };
     r.appendChild(s);
     r.appendChild(b);
     uzEd.bar(r);
-    // Надпись кнопки: «Обновить содержание», если в статье уже есть содержание
-    var tm, lbl = function (e) { b.innerHTML = e.getData().indexOf('table-of-contents') > -1 ? 'Обновить содержание' : 'Вставить содержание'; },
+    // Надпись кнопки: «Обновить», если в статье уже есть содержание
+    var tm, lbl = function (e) { var u = e.getData().indexOf('table-of-contents') > -1; b.innerHTML = u ? 'Обновить' : 'Содержание'; b.title = u ? 'Обновить содержание' : 'Вставить содержание'; },
         hook = function (e) {
           if (e.name !== 'message') return;
           lbl(e);
